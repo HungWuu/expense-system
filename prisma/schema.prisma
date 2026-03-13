@@ -1,0 +1,89 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// ユーザー情報（Microsoft Entra ID と連携）
+model User {
+  id             String   @id @default(uuid())
+  azureAdOid     String   @unique @map("azure_ad_oid")
+  employeeNumber String   @unique @map("employee_number")
+  name           String
+  email          String   @unique
+  department     String
+  role           String   @default("employee") // employee | manager | admin
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  expenses         Expense[] @relation("Applicant")
+  approvedExpenses Expense[] @relation("Approver")
+
+  @@index([azureAdOid])
+  @@index([email])
+  @@map("users")
+}
+
+/// 精算項目マスタ
+model ExpenseCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  budgetLimit Int?     @map("budget_limit") // 1件あたり上限額（円）
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  expenses Expense[]
+
+  @@index([code])
+  @@map("expense_categories")
+}
+
+/// 精算データ
+model Expense {
+  id              String   @id @default(uuid())
+  applicantId     String   @map("applicant_id")
+  categoryId      String   @map("category_id")
+  title           String
+  description     String?
+  amount          Int // 金額（円）
+  taxAmount       Int      @default(0) @map("tax_amount") // 消費税額（円）
+  taxRate         Float    @default(10.00) @map("tax_rate") // 税率（%）
+  date            DateTime // 利用日
+  vendor          String? // 支払先
+  receiptUrl      String?  @map("receipt_url") // 領収書ファイルURL
+  status          String   @default("draft") // draft | submitted | approved | rejected | settled
+  approverId      String?  @map("approver_id")
+  approvedAt      DateTime? @map("approved_at")
+  rejectionReason String?  @map("rejection_reason")
+  submittedAt     DateTime? @map("submitted_at")
+  settledAt       DateTime? @map("settled_at")
+  fiscalYear      Int      @map("fiscal_year")
+  fiscalMonth     Int      @map("fiscal_month")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // リレーション
+  applicant User            @relation("Applicant", fields: [applicantId], references: [id], onDelete: Restrict)
+  approver  User?           @relation("Approver", fields: [approverId], references: [id], onDelete: SetNull)
+  category  ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([applicantId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([date])
+  @@index([submittedAt])
+  @@index([fiscalYear, fiscalMonth])
+  @@map("expenses")
+}
