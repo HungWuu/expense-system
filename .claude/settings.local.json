@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e \"require\\('dotenv/config'\\); console.log\\(process.env.DATABASE_URL\\)\")"
+      "Bash(node -e \"require\\('dotenv/config'\\); console.log\\(process.env.DATABASE_URL\\)\")",
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(cat C:/Users/henry/expense-system/node_modules/@libsql/client/package.json | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('exports',{}\\), indent=2\\)\\)\" 2>/dev/null || cat C:/Users/henry/expense-system/node_modules/@libsql/client/package.json | head -40)"
     ]
   }
 }

@@ -48,6 +48,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    // --- DEBUG: デバッグ情報を収集 ---
+    const allUsers = await prisma.user.findMany({
+      select: { id: true, azureAdOid: true, name: true, email: true },
+    });
+    const debug = {
+      sessionUser: session.user,
+      bodyApplicantId: body.applicantId,
+      bodyCategoryId: body.categoryId,
+      dbUsers: allUsers,
+    };
+    // --- END DEBUG ---
+
     const {
       applicantId,
       categoryId,
@@ -66,14 +78,14 @@ export async function POST(request: NextRequest) {
     // 必須フィールドのバリデーション
     if (!applicantId || !categoryId || !title || amount == null || !date || fiscalYear == null || fiscalMonth == null) {
       return NextResponse.json(
-        { error: "必須項目が不足しています（applicantId, categoryId, title, amount, date, fiscalYear, fiscalMonth）" },
+        { error: "必須項目が不足しています（applicantId, categoryId, title, amount, date, fiscalYear, fiscalMonth）", debug },
         { status: 400 }
       );
     }
 
     if (fiscalMonth < 1 || fiscalMonth > 12) {
       return NextResponse.json(
-        { error: "fiscalMonth は 1〜12 の範囲で指定してください" },
+        { error: "fiscalMonth は 1〜12 の範囲で指定してください", debug },
         { status: 400 }
       );
     }
@@ -82,7 +94,7 @@ export async function POST(request: NextRequest) {
     const applicant = await prisma.user.findUnique({ where: { id: applicantId } });
     if (!applicant) {
       return NextResponse.json(
-        { error: `申請者が見つかりません（applicantId: ${applicantId}）` },
+        { error: `申請者が見つかりません（applicantId: ${applicantId}）`, debug },
         { status: 400 }
       );
     }

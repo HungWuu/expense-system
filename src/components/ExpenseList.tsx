@@ -271,7 +271,7 @@ export function ExpenseList({ expenses, categories, summary }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          applicantId: "user-001",
+          applicantId: session.user.id,
           categoryId: form.item,
           title: `${categoryName} ${form.details}`.trim(),
           description: form.details || null,
@@ -286,7 +286,9 @@ export function ExpenseList({ expenses, categories, summary }: Props) {
 
       if (!res.ok) {
         const err = await res.json();
-        setSubmitError(err.error || "登録に失敗しました");
+        // DEBUG: エラー時にデバッグ情報も表示
+        const debugInfo = err.debug ? `\n[DEBUG] ${JSON.stringify(err.debug)}` : "";
+        setSubmitError((err.error || "登録に失敗しました") + debugInfo);
         return;
       }
 

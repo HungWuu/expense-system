@@ -9,17 +9,17 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const categories = await prisma.expenseCategory.findMany({
+    where: { isActive: true },
+    orderBy: { code: "asc" },
+  });
+
   const expenses = await prisma.expense.findMany({
     include: {
       applicant: { select: { id: true, name: true, email: true, department: true } },
       category: { select: { id: true, code: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
-  });
-
-  const categories = await prisma.expenseCategory.findMany({
-    where: { isActive: true },
-    orderBy: { code: "asc" },
   });
 
   // 合計金額を算出（当日 / 当月 / 当年）

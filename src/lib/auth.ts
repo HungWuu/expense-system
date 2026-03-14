@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import type { Provider } from "next-auth/providers/index";
 import AzureADProvider from "next-auth/providers/azure-ad";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { prisma } from "@/lib/prisma";
 
 const providers: Provider[] = [
   AzureADProvider({
@@ -56,10 +57,40 @@ export const authOptions: NextAuthOptions = {
       if (account) {
         token.accessToken = account.access_token;
       }
+
+      // DB の user.id を token に保持（未取得の場合は upsert で取得）
+      console.log("[DEBUG jwt] token.dbUserId:", token.dbUserId, "token.sub:", token.sub, "token.email:", token.email);
+      if (!token.dbUserId && token.sub && token.email) {
+        console.log("[DEBUG jwt] dbUserId not set, upserting user...");
+        try {
+          const user = await prisma.user.upsert({
+            where: { azureAdOid: token.sub },
+            update: {
+              name: token.name ?? "",
+              email: token.email ?? "",
+            },
+            create: {
+              azureAdOid: token.sub,
+              employeeNumber: token.email ?? token.sub,
+              name: token.name ?? "",
+              email: token.email ?? "",
+              department: "未設定",
+            },
+          });
+          token.dbUserId = user.id;
+          console.log("[DEBUG jwt] upserted user, dbUserId:", user.id);
+        } catch (e) {
+          console.error("[DEBUG jwt] user upsert failed:", e);
+        }
+      }
       return token;
     },
     async session({ session, token }) {
-      if (token.sub) {
+      // DB の id をセッションに設定（Azure AD の OID ではなく）
+      if (token.dbUserId) {
+        session.user.id = token.dbUserId as string;
+      } else if (token.sub) {
+        // E2Eテスト用フォールバック
         session.user.id = token.sub;
       }
       return session;
