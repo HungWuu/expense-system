@@ -68,22 +68,53 @@ export const authOptions: NextAuthOptions = {
       if (!token.dbUserId && token.sub && token.email) {
         console.log("[DEBUG jwt] dbUserId not set, upserting user...");
         try {
-          const user = await prisma.user.upsert({
+          // まず azureAdOid で検索
+          let user = await prisma.user.findUnique({
             where: { azureAdOid: token.sub },
-            update: {
-              name: token.name ?? "",
-              email: token.email ?? "",
-            },
-            create: {
-              azureAdOid: token.sub,
-              employeeNumber: token.email ?? token.sub,
-              name: token.name ?? "",
-              email: token.email ?? "",
-              department: "未設定",
-            },
           });
+
+          if (user) {
+            // 既存ユーザー: 名前・メールを更新
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                name: token.name ?? user.name,
+                email: token.email ?? user.email,
+              },
+            });
+            console.log("[DEBUG jwt] found existing user by azureAdOid, dbUserId:", user.id);
+          } else {
+            // azureAdOid が未登録 → email で既存ユーザーを検索
+            const existingByEmail = await prisma.user.findUnique({
+              where: { email: token.email! },
+            });
+
+            if (existingByEmail) {
+              // email が一致するユーザーに azureAdOid を紐付け
+              user = await prisma.user.update({
+                where: { id: existingByEmail.id },
+                data: {
+                  azureAdOid: token.sub,
+                  name: token.name ?? existingByEmail.name,
+                },
+              });
+              console.log("[DEBUG jwt] linked azureAdOid to existing user by email, dbUserId:", user.id);
+            } else {
+              // 完全に新規ユーザー → 作成
+              user = await prisma.user.create({
+                data: {
+                  azureAdOid: token.sub,
+                  employeeNumber: token.email ?? token.sub,
+                  name: token.name ?? "",
+                  email: token.email ?? "",
+                  department: "未設定",
+                },
+              });
+              console.log("[DEBUG jwt] created new user, dbUserId:", user.id);
+            }
+          }
+
           token.dbUserId = user.id;
-          console.log("[DEBUG jwt] upserted user, dbUserId:", user.id);
         } catch (e) {
           console.error("[DEBUG jwt] user upsert failed:", e);
         }
@@ -94,6 +125,30 @@ export const authOptions: NextAuthOptions = {
       // DB の id をセッションに設定（Azure AD の OID ではなく）
       if (token.dbUserId) {
         session.user.id = token.dbUserId as string;
+      } else if (token.sub && token.email) {
+        // dbUserId が未設定の場合、DB から再取得を試みる
+        console.log("[DEBUG session] dbUserId not set, attempting DB lookup for sub:", token.sub);
+        try {
+          let user = await prisma.user.findUnique({
+            where: { azureAdOid: token.sub },
+          });
+          if (!user) {
+            user = await prisma.user.findUnique({
+              where: { email: token.email as string },
+            });
+          }
+          if (user) {
+            session.user.id = user.id;
+            console.log("[DEBUG session] resolved user.id from DB:", user.id);
+          } else {
+            // E2Eテスト用フォールバック
+            session.user.id = token.sub;
+            console.log("[DEBUG session] no DB user found, using token.sub:", token.sub);
+          }
+        } catch (e) {
+          console.error("[DEBUG session] DB lookup failed:", e);
+          session.user.id = token.sub;
+        }
       } else if (token.sub) {
         // E2Eテスト用フォールバック
         session.user.id = token.sub;

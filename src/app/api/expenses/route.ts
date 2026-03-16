@@ -61,7 +61,6 @@ export async function POST(request: NextRequest) {
     // --- END DEBUG ---
 
     const {
-      applicantId,
       categoryId,
       title,
       description,
@@ -74,6 +73,9 @@ export async function POST(request: NextRequest) {
       fiscalYear,
       fiscalMonth,
     } = body;
+
+    // セッションから applicantId を取得（リクエストボディより優先）
+    const applicantId = session.user?.id ?? body.applicantId;
 
     // 必須フィールドのバリデーション
     if (!applicantId || !categoryId || !title || amount == null || !date || fiscalYear == null || fiscalMonth == null) {
